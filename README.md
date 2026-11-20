@@ -1,7 +1,7 @@
 # CG-Lab-Activity-3
 
 # AI Notice
-I did heavily use Google's AI Overview feature when making the water shader due to not knowing the specific functions .
+I did heavily use Google's AI Overview feature when making the water shader due to not knowing the specific functions for SSR and probe reflections in HLSL, as well as sampling the depth buffer. However, the logical process was still developed solely individually, and I tried to fit comments both for myself to learn and to show references where I could.
 
 # Desired Effect
 
