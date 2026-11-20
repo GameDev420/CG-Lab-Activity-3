@@ -13,6 +13,19 @@ MonoBehaviour:
   m_Name: SurfaceCacheGIRendererFeature
   m_EditorClassIdentifier: Unity.RenderPipelines.Universal.Runtime::UnityEngine.Rendering.Universal.SurfaceCacheGIRendererFeature
   m_Active: 0
+--- !u!114 &-241719805297136025
+MonoBehaviour:
+  m_ObjectHideFlags: 1
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4aefd49af642d4649929e53071ef4195, type: 3}
+  m_Name: CopyDepthBeforeCutoutFeature
+  m_EditorClassIdentifier: Assembly-CSharp::CopyDepthBeforeCutoutFeature
+  m_Active: 1
 --- !u!114 &11400000
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -41,7 +54,8 @@ MonoBehaviour:
   - {fileID: 7833122117494664109}
   - {fileID: -6020005323837361514}
   - {fileID: 6948394444229324058}
-  m_RendererFeatureMap: ad6b866f10d7b46c96b2b6a60da574ac1a2d96cfeea76d60l
+  - {fileID: -241719805297136025}
+  m_RendererFeatureMap: ad6b866f10d7b46c96b2b6a60da574ac1a2d96cfeea76d60676e16261e3da5fcl
   xrSystemData: {fileID: 0}
   postProcessData: {fileID: 11400000, guid: 41439944d30ece34e96484bdb6645b55, type: 2}
   m_AssetVersion: 3
