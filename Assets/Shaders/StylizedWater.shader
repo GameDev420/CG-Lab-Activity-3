@@ -2,11 +2,16 @@ Shader "Custom/StylizedWater"
 {
     Properties
     {
-        _BaseColor("Base Color", Color) = (1, 1, 1, 1)
-        _BaseMap("Base Map", 2D) = "white" {}
+        _NormalMap("Normal Map", 2D) = "bump" {}
+        _NormalStrength("Normal Strength", Float) = 1.0
+
+        _ScrollSpeed("Scroll Speed", Vector, 2) = (0.1, 0.1, 0, 0)
 
         _Smoothness("Smoothness", Float) = 0.5
         _Occlusion("Occlusion", Float) = 1.0
+        
+        [HDR] _SpecColor("Specular Color", Color) = (1, 1, 1, 1)
+        _SpecShininess("Specular Shininess", Float) = 32.0
 
         [Space(5.0)]
         _NearDepthColor("Near Depth Color", Color) = (1, 1, 1, 1)
@@ -17,11 +22,10 @@ Shader "Custom/StylizedWater"
 
     SubShader
     {
-        Tags { "RenderType" = "TransparentCutout" "Queue" = "AlphaTest" "RenderPipeline" = "UniversalPipeline" }
+        Tags { "RenderType" = "Transparent" "Queue" = "Transparent" "RenderPipeline" = "UniversalPipeline" }
 
-        // Both required for screen space effects (afaik)
-        UsePass "Universal Render Pipeline/Lit/DepthNormals"
-        //UsePass "Universal Render Pipeline/Lit/DepthOnly"
+        // Required for screen space effects (afaik)
+        //UsePass "Universal Render Pipeline/Lit/DepthNormals"
 
         Pass
         {
@@ -53,6 +57,7 @@ Shader "Custom/StylizedWater"
             #pragma multi_compile_fragment _ _SCREEN_SPACE_REFLECTION
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl" // For specular
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/BRDF.hlsl" // Dependancy of GlobalIllumination.hlsl, literally won't compile without it
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/GlobalIllumination.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DeclareDepthTexture.hlsl"
@@ -64,6 +69,8 @@ Shader "Custom/StylizedWater"
 
                 float4 positionOS : POSITION;
                 float3 normalOS : NORMAL;
+
+                float4 tangentOS : TANGENT;
             };
 
             struct Varyings
@@ -73,22 +80,24 @@ Shader "Custom/StylizedWater"
                 float4 positionHCS : SV_POSITION;
                 float3 positionWS : TEXCOORD1;
                 float3 normalWS : TEXCOORD2;
-
-                float4 screenPos : TEXCOORD3;
+                float3 tangentWS : TEXCOORD3;
+                float3 bitangentWS : TEXCOORD4;
             };
 
-            TEXTURE2D(_BaseMap);
-            SAMPLER(sampler_BaseMap);
-
-            TEXTURE2D_X(_BehindAlphaTestDepthTexture);
-            SAMPLER(sampler_BehindAlphaTestDepthTexture);
+            TEXTURE2D(_NormalMap);
+            SAMPLER(sampler_NormalMap);
 
             CBUFFER_START(UnityPerMaterial)
-                half4 _BaseColor;
-                float4 _BaseMap_ST;
+                float4 _NormalMap_ST;
+                float _NormalStrength;
+
+                float2 _ScrollSpeed;
 
                 float _Smoothness;
                 float _Occlusion;
+
+                half4 _SpecColor;
+                float _SpecShininess;
 
                 half4 _NearDepthColor;
                 half4 _FullDepthColor;
@@ -102,10 +111,14 @@ Shader "Custom/StylizedWater"
                 Varyings OUT;
                 OUT.positionHCS = TransformObjectToHClip(IN.positionOS.xyz);
                 OUT.positionWS = TransformObjectToWorld(IN.positionOS.xyz);
-                OUT.normalWS = TransformObjectToWorldNormal(IN.normalOS);
-                OUT.uv = TRANSFORM_TEX(IN.uv, _BaseMap);
 
-                OUT.screenPos = ComputeScreenPos(OUT.positionHCS);
+                float2 uv = IN.uv;
+                uv += _ScrollSpeed * _Time.y;
+                OUT.uv = TRANSFORM_TEX(uv, _NormalMap);
+
+                OUT.normalWS = TransformObjectToWorldNormal(IN.normalOS);
+                OUT.tangentWS = normalize(TransformObjectToWorldNormal(IN.tangentOS.xyz));
+				OUT.bitangentWS = cross(OUT.normalWS, OUT.tangentWS) * IN.tangentOS.w;
 
                 return OUT;
             }
@@ -124,16 +137,16 @@ Shader "Custom/StylizedWater"
                 float3 R = reflect(-V, N);
 
                 // Reflection Probes
-                float3 probes = GlossyEnvironmentReflection(R, positionWS.xyz, _Smoothness, _Occlusion, ssUV);
+                float3 probes = GlossyEnvironmentReflection(R, positionWS.xyz, PerceptualSmoothnessToPerceptualRoughness(_Smoothness), _Occlusion, ssUV);
 
                 // Found via Google AI Overview and reading into its sources (like the following):
                 // https://discussions.unity.com/t/preview-of-screen-space-reflections-for-urp/1721494/20
-                float4 ssr = SampleScreenSpaceReflection(ssUV, positionWS, PerceptualSmoothnessToPerceptualRoughness(_Smoothness));
+                //float4 ssr = SampleScreenSpaceReflection(ssUV, positionWS, PerceptualSmoothnessToPerceptualRoughness(_Smoothness));
                 
                 // Lerp between reflection probes and SSR based on its fade weight (i.e. if object in reflection is out of view?)
-                half3 color = lerp(probes, ssr.rgb, ssr.a);
+                //half3 color = lerp(probes, ssr.rgb, ssr.a);
                 
-                return color;
+                return probes;
             }
 
             half4 ApplyDepthColor(half4 finalColor, float4 positionHCS)
@@ -144,7 +157,7 @@ Shader "Custom/StylizedWater"
                 // (calculate effective depth, inverse lerp, apply to fragment color)
 
                 // Sample depth buffer
-                // This is the first method that worked when testing various functions due to shader being in the AlphaTest queue
+                // Tons of variations to do this, but this one seemed most likely to work with Transparent render queue (which it didn't)
                 float2 screenUV = positionHCS.xy / _ScaledScreenParams.xy;
                 float rawSceneDepth = SampleSceneDepth(screenUV);
 
@@ -160,20 +173,52 @@ Shader "Custom/StylizedWater"
 
                 float t = InverseLerp(max(_NearDepth, 0), max(_FarDepth, _NearDepth), belowObjDepthWS - waterDepthWS);
 
-                finalColor.rgb = lerp(finalColor.rgb, _FullDepthColor, t);
+                finalColor *= lerp(_NearDepthColor, _FullDepthColor, t);
 
                 return finalColor;
             }
 
+            half3 GetSpecular(half3 normalWS, half3 viewDirWS)
+            {
+                Light mainLight = GetMainLight();
+				half3 lightDir = normalize(mainLight.direction);
+
+				half3 reflectDir = reflect(-lightDir, normalWS);
+
+				half3 viewDir = normalize(viewDirWS);
+				half specFactor = pow(saturate(dot(reflectDir, viewDir)), max(_SpecShininess, 1));
+				half3 specular = _SpecColor.rgb * specFactor;
+                
+				float nDotL = saturate(dot(normalWS, lightDir));
+				return specular * nDotL;
+            }
+
+            half3 GetNormal(float2 uv, float3 normalWS, float3 tangentWS, float3 bitangentWS)
+            {
+                half3 normalTS = UnpackNormal(SAMPLE_TEXTURE2D(_NormalMap, sampler_NormalMap, uv));
+
+				normalTS.xy *= _NormalStrength;
+
+				half3x3 TBN = half3x3(tangentWS, bitangentWS, normalWS);
+				return normalize(mul(normalTS, TBN));
+            }
+
             half4 frag(Varyings IN) : SV_Target
             {
-                half4 finalColor = _BaseColor;
+                half4 finalColor = half4(1, 1, 1, 1);
+
+                half3 normalWS = GetNormal(IN.uv, IN.normalWS, IN.tangentWS, IN.bitangentWS);
 
                 float2 ssUV = GetNormalizedScreenSpaceUV(IN.positionHCS);
+                
+                // Reflections
+                finalColor.rgb *= GetReflectionColor(IN.positionWS, normalWS, ssUV);
 
-                finalColor.rgb *= GetReflectionColor(IN.positionWS, IN.normalWS, ssUV);
+                // Depth coloring
+                finalColor = ApplyDepthColor(finalColor, IN.positionHCS);
 
-                finalColor = ApplyDepthColor(finalColor, IN.positionHCS, ssUV);
+                // Specular
+                finalColor.rgb += GetSpecular(normalWS, GetWorldSpaceViewDir(IN.positionWS));
 
                 return finalColor;
             }

@@ -102,7 +102,7 @@ Material:
     - _Blend: 0
     - _BlendModePreserveSpecular: 1
     - _BumpScale: 1
-    - _CellDensity: 14
+    - _CellDensity: 30
     - _Cell_Angle_Change_Speed: 0.1
     - _ClearCoatMask: 0
     - _ClearCoatSmoothness: 0
