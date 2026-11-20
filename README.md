@@ -17,6 +17,7 @@ https://youtu.be/pyZqEkMDjUg?t=176
 # My Implementation
 
 (First shows the depth coloring with baked reflections, then the SSR version)
+
 https://github.com/user-attachments/assets/fa241b6f-23fd-46b7-8061-9fb708ea4c5e
 
 Compared to the basic water shader, I added reflections (SSR and through reflection probes, but not simultaneously), depth-based water coloring and transparency, specular highlights, and a tiling normal map to distort said reflections. There are also caustics on the surface below the water, but that was merely another shader to create an illusion rather than projecting decals or anything fancy.
